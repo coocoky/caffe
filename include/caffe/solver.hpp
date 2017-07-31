@@ -6,13 +6,14 @@
 
 #include "caffe/net.hpp"
 #include "caffe/solver_factory.hpp"
+#include "caffe/util/benchmark.hpp"
 
 namespace caffe {
 
 /**
   * @brief Enumeration of actions that a client of the Solver may request by
   * implementing the Solver's action request function, which a
-  * a client may optionally provide in order to request early termination
+  * client may optionally provide in order to request early termination
   * or saving a snapshot without exiting. In the executable caffe, this
   * mechanism is used to allow the snapshot to be saved when stopping
   * execution with a SIGINT (Ctrl-C).
@@ -40,22 +41,21 @@ typedef boost::function<SolverAction::Enum()> ActionCallback;
 template <typename Dtype>
 class Solver {
  public:
-  explicit Solver(const SolverParameter& param,
-      const Solver* root_solver = NULL);
-  explicit Solver(const string& param_file, const Solver* root_solver = NULL);
-  void Init(const SolverParameter& param);
-  void InitTrainNet();
+  explicit Solver(const SolverParameter& param);
+  explicit Solver(const string& param_file); // 参数文件
+  void Init(const SolverParameter& param);  //  初始花网络参数, 构造函数调用
+  void InitTrainNet();  // 初始化训练网络
   void InitTestNets();
-
+  //  
   // Client of the Solver optionally may call this in order to set the function
   // that the solver uses to see what action it should take (e.g. snapshot or
   // exit training early).
-  void SetActionFunction(ActionCallback func);
-  SolverAction::Enum GetRequestedAction();
+  void SetActionFunction(ActionCallback func);  //  回调操作, 
+  SolverAction::Enum GetRequestedAction(); // 得到需求的操作, none, stop, snapshot
   // The main entry of the solver function. In default, iter will be zero. Pass
   // in a non-zero iter number to resume training for a pre-trained net.
-  virtual void Solve(const char* resume_file = NULL);
-  inline void Solve(const string resume_file) { Solve(resume_file.c_str()); }
+  virtual void Solve(const char* resume_file = NULL);  // 预训练网络
+  inline void Solve(const string resume_file) { Solve(resume_file.c_str()); } // 调用前面
   void Step(int iters);
   // The Restore method simply dispatches to one of the
   // RestoreSolverStateFrom___ protected methods. You should implement these
@@ -65,14 +65,14 @@ class Solver {
   // that stores the learned net. You should implement the SnapshotSolverState()
   // function that produces a SolverState protocol buffer that needs to be
   // written to disk together with the learned net.
-  void Snapshot();
+  void Snapshot(); // 快照
   virtual ~Solver() {}
   inline const SolverParameter& param() const { return param_; }
-  inline shared_ptr<Net<Dtype> > net() { return net_; }
-  inline const vector<shared_ptr<Net<Dtype> > >& test_nets() {
+  inline shared_ptr<Net<Dtype> > net() { return net_; } //  提到网络
+  inline const vector<shared_ptr<Net<Dtype> > >& test_nets() {  //  得到测试网络
     return test_nets_;
   }
-  int iter() { return iter_; }
+  int iter() const { return iter_; }  // 得到迭代器
 
   // Invoked at specific points during an iteration
   class Callback {
@@ -80,7 +80,7 @@ class Solver {
     virtual void on_start() = 0;
     virtual void on_gradients_ready() = 0;
 
-    template <typename T>
+    template <typename T> // 模板?
     friend class Solver;
   };
   const vector<Callback*>& callbacks() const { return callbacks_; }
@@ -97,11 +97,11 @@ class Solver {
  protected:
   // Make and apply the update value for the current iteration.
   virtual void ApplyUpdate() = 0;
-  string SnapshotFilename(const string extension);
-  string SnapshotToBinaryProto();
-  string SnapshotToHDF5();
+  string SnapshotFilename(const string extension);  // 快照文件名
+  string SnapshotToBinaryProto(); //  快照到BinaryProto
+  string SnapshotToHDF5();  //  快照到hdf5
   // The test routine
-  void TestAll();
+  void TestAll(); //  
   void Test(const int test_net_id = 0);
   virtual void SnapshotSolverState(const string& model_filename) = 0;
   virtual void RestoreSolverStateFromHDF5(const string& state_file) = 0;
@@ -109,51 +109,27 @@ class Solver {
   void DisplayOutputBlobs(const int net_id);
   void UpdateSmoothedLoss(Dtype loss, int start_iter, int average_loss);
 
-  SolverParameter param_;
-  int iter_;
-  int current_step_;
-  shared_ptr<Net<Dtype> > net_;
-  vector<shared_ptr<Net<Dtype> > > test_nets_;
-  vector<Callback*> callbacks_;
-  vector<Dtype> losses_;
-  Dtype smoothed_loss_;
-
-  // The root solver that holds root nets (actually containing shared layers)
-  // in data parallelism
-  const Solver* const root_solver_;
-
+  SolverParameter param_; // 规划参数
+  int iter_;  // 迭代数
+  int current_step_;  // 当前步骤
+  shared_ptr<Net<Dtype> > net_; // 网络
+  vector<shared_ptr<Net<Dtype> > > test_nets_;  // 测试网络
+  vector<Callback*> callbacks_; //  回调矢量
+  vector<Dtype> losses_;  // 损失函数
+  Dtype smoothed_loss_; // 平滑损失
+  //  行为回调函数
   // A function that can be set by a client of the Solver to provide indication
   // that it wants a snapshot saved and/or to exit early.
   ActionCallback action_request_function_;
 
   // True iff a request to stop early was received.
-  bool requested_early_exit_;
+  bool requested_early_exit_; //  是否提前退出
 
-  DISABLE_COPY_AND_ASSIGN(Solver);
-};
+  // Timing information, handy to tune e.g. nbr of GPUs
+  Timer iteration_timer_; // 迭代时间
+  float iterations_last_; // 最后的迭代
 
-/**
- * @brief Solver that only computes gradients, used as worker
- *        for multi-GPU training.
- */
-template <typename Dtype>
-class WorkerSolver : public Solver<Dtype> {
- public:
-  explicit WorkerSolver(const SolverParameter& param,
-      const Solver<Dtype>* root_solver = NULL)
-      : Solver<Dtype>(param, root_solver) {}
-
- protected:
-  void ApplyUpdate() {}
-  void SnapshotSolverState(const string& model_filename) {
-    LOG(FATAL) << "Should not be called on worker solver.";
-  }
-  void RestoreSolverStateFromBinaryProto(const string& state_file) {
-    LOG(FATAL) << "Should not be called on worker solver.";
-  }
-  void RestoreSolverStateFromHDF5(const string& state_file) {
-    LOG(FATAL) << "Should not be called on worker solver.";
-  }
+  DISABLE_COPY_AND_ASSIGN(Solver); // 不能copy 和 指派
 };
 
 }  // namespace caffe

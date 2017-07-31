@@ -17,21 +17,16 @@
 #include "caffe/util/math_functions.hpp"
 #include "caffe/util/upgrade_proto.hpp"
 
-#include "caffe/test/test_caffe_main.hpp"
-
 namespace caffe {
-
+// 网络初始化
 template <typename Dtype>
-Net<Dtype>::Net(const NetParameter& param, const Net* root_net)
-    : root_net_(root_net) {
+Net<Dtype>::Net(const NetParameter& param) {
   Init(param);
 }
-
+//  网络初始化, 
 template <typename Dtype>
 Net<Dtype>::Net(const string& param_file, Phase phase,
-    const int level, const vector<string>* stages,
-    const Net* root_net)
-    : root_net_(root_net) {
+    const int level, const vector<string>* stages) {
   NetParameter param;
   ReadNetParamsFromTextFileOrDie(param_file, &param);
   // Set phase, stages and level
@@ -44,11 +39,9 @@ Net<Dtype>::Net(const string& param_file, Phase phase,
   param.mutable_state()->set_level(level);
   Init(param);
 }
-
+//  参数初始化 in_param  网络参数
 template <typename Dtype>
 void Net<Dtype>::Init(const NetParameter& in_param) {
-  CHECK(Caffe::root_solver() || root_net_)
-      << "root_net_ needs to be set for all non-root solvers";
   // Set phase from the state.
   phase_ = in_param.state().phase();
   // Filter layers based on their include/exclude rules and
@@ -62,61 +55,52 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   NetParameter param;
   InsertSplits(filtered_param, &param);
   // Basically, build all the layers and set up their connections.
-  name_ = param.name();
-  map<string, int> blob_name_to_idx;
-  set<string> available_blobs;
+  name_ = param.name(); // 网络名字
+  map<string, int> blob_name_to_idx; // blob name 索引
+  set<string> available_blobs;  // 可得到的blobs
   memory_used_ = 0;
-  // For each layer, set up its input and output
-  bottom_vecs_.resize(param.layer_size());
+  // For each layer, set up its input and output  // 每层设置输入和输出
+  bottom_vecs_.resize(param.layer_size()); //
   top_vecs_.resize(param.layer_size());
   bottom_id_vecs_.resize(param.layer_size());
   param_id_vecs_.resize(param.layer_size());
   top_id_vecs_.resize(param.layer_size());
   bottom_need_backward_.resize(param.layer_size());
   for (int layer_id = 0; layer_id < param.layer_size(); ++layer_id) {
-    // For non-root solvers, whether this layer is shared from root_net_.
-    bool share_from_root = !Caffe::root_solver()
-        && root_net_->layers_[layer_id]->ShareInParallel();
-    // Inherit phase from net if unset.
+    // Inherit phase from net if unset. // 没有设置phase, 继承原来的phase_
     if (!param.layer(layer_id).has_phase()) {
       param.mutable_layer(layer_id)->set_phase(phase_);
     }
     // Setup layer.
-    const LayerParameter& layer_param = param.layer(layer_id);
+    const LayerParameter& layer_param = param.layer(layer_id); // 层参数
     if (layer_param.propagate_down_size() > 0) {
       CHECK_EQ(layer_param.propagate_down_size(),
           layer_param.bottom_size())
           << "propagate_down param must be specified "
           << "either 0 or bottom_size times ";
     }
-    if (share_from_root) {
-      LOG(INFO) << "Sharing layer " << layer_param.name() << " from root net";
-      layers_.push_back(root_net_->layers_[layer_id]);
-      layers_[layer_id]->SetShared(true);
-    } else {
-      layers_.push_back(LayerRegistry<Dtype>::CreateLayer(layer_param));
-    }
+    layers_.push_back(LayerRegistry<Dtype>::CreateLayer(layer_param));
     layer_names_.push_back(layer_param.name());
     LOG_IF(INFO, Caffe::root_solver())
         << "Creating Layer " << layer_param.name();
     bool need_backward = false;
-
+    // 计算该层的输入和输出
     // Figure out this layer's input and output
     for (int bottom_id = 0; bottom_id < layer_param.bottom_size();
          ++bottom_id) {
       const int blob_id = AppendBottom(param, layer_id, bottom_id,
                                        &available_blobs, &blob_name_to_idx);
-      // If a blob needs backward, this layer should provide it.
+      // If a blob needs backward, this layer should provide it. // 需要反向, 提供
       need_backward |= blob_need_backward_[blob_id];
     }
-    int num_top = layer_param.top_size();
-    for (int top_id = 0; top_id < num_top; ++top_id) {
+    int num_top = layer_param.top_size(); //   输出大小
+    for (int top_id = 0; top_id < num_top; ++top_id) { // 输入层是top
       AppendTop(param, layer_id, top_id, &available_blobs, &blob_name_to_idx);
-      // Collect Input layer tops as Net inputs.
-      if (layer_param.type() == "Input") {
+      // Collect Input layer tops as Net inputs. 
+      if (layer_param.type() == "Input") { // 层的类型为输入类型
         const int blob_id = blobs_.size() - 1;
-        net_input_blob_indices_.push_back(blob_id);
-        net_input_blobs_.push_back(blobs_[blob_id].get());
+        net_input_blob_indices_.push_back(blob_id); //  ?
+        net_input_blobs_.push_back(blobs_[blob_id].get());  //  ?
       }
     }
     // If the layer specifies that AutoTopBlobs() -> true and the LayerParameter
@@ -133,20 +117,8 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
         AppendTop(param, layer_id, num_top, NULL, NULL);
       }
     }
-    // After this layer is connected, set it up.
-    if (share_from_root) {
-      // Set up size of top blobs using root_net_
-      const vector<Blob<Dtype>*>& base_top = root_net_->top_vecs_[layer_id];
-      const vector<Blob<Dtype>*>& this_top = this->top_vecs_[layer_id];
-      for (int top_id = 0; top_id < base_top.size(); ++top_id) {
-        this_top[top_id]->ReshapeLike(*base_top[top_id]);
-        LOG(INFO) << "Created top blob " << top_id << " (shape: "
-            << this_top[top_id]->shape_string() <<  ") for shared layer "
-            << layer_param.name();
-      }
-    } else {
-      layers_[layer_id]->SetUp(bottom_vecs_[layer_id], top_vecs_[layer_id]);
-    }
+    // After this layer is connected, set it up. // 层连接, 设置
+    layers_[layer_id]->SetUp(bottom_vecs_[layer_id], top_vecs_[layer_id]);
     LOG_IF(INFO, Caffe::root_solver())
         << "Setting up " << layer_names_[layer_id];
     for (int top_id = 0; top_id < top_vecs_[layer_id].size(); ++top_id) {
@@ -160,7 +132,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
         LOG_IF(INFO, Caffe::root_solver())
             << "    with loss weight " << layer->loss(top_id);
       }
-      memory_used_ += top_vecs_[layer_id][top_id]->count();
+      memory_used_ += top_vecs_[layer_id][top_id]->count(); //  存储用
     }
     LOG_IF(INFO, Caffe::root_solver())
         << "Memory required for data: " << memory_used_ * sizeof(Dtype);
@@ -282,7 +254,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   debug_info_ = param.debug_info();
   LOG_IF(INFO, Caffe::root_solver()) << "Network initialization done.";
 }
-
+// 过滤网络参数,  给定当前phase/level/stage,移除指定层。
 template <typename Dtype>
 void Net<Dtype>::FilterNet(const NetParameter& param,
     NetParameter* param_filtered) {
@@ -290,8 +262,8 @@ void Net<Dtype>::FilterNet(const NetParameter& param,
   param_filtered->CopyFrom(param);
   param_filtered->clear_layer();
   for (int i = 0; i < param.layer_size(); ++i) {
-    const LayerParameter& layer_param = param.layer(i);
-    const string& layer_name = layer_param.name();
+    const LayerParameter& layer_param = param.layer(i); //取每层
+    const string& layer_name = layer_param.name();  //取每层名字
     CHECK(layer_param.include_size() == 0 || layer_param.exclude_size() == 0)
           << "Specify either include rules or exclude rules; not both.";
     // If no include rules are specified, the layer is included by default and
@@ -312,7 +284,7 @@ void Net<Dtype>::FilterNet(const NetParameter& param,
     }
   }
 }
-
+//  状态规则
 template <typename Dtype>
 bool Net<Dtype>::StateMeetsRule(const NetState& state,
     const NetStateRule& rule, const string& layer_name) {
@@ -378,7 +350,7 @@ bool Net<Dtype>::StateMeetsRule(const NetState& state,
   }
   return true;
 }
-
+// 增加输出
 // Helper for Net::Init: add a new top blob to the net.
 template <typename Dtype>
 void Net<Dtype>::AppendTop(const NetParameter& param, const int layer_id,
@@ -444,7 +416,7 @@ int Net<Dtype>::AppendBottom(const NetParameter& param, const int layer_id,
   bottom_need_backward_[layer_id].push_back(need_backward);
   return blob_id;
 }
-
+// 增加参数
 template <typename Dtype>
 void Net<Dtype>::AppendParam(const NetParameter& param, const int layer_id,
                              const int param_id) {
@@ -539,21 +511,26 @@ void Net<Dtype>::AppendParam(const NetParameter& param, const int layer_id,
     }
   }
 }
-
+// 网络前向传播
 template <typename Dtype>
 Dtype Net<Dtype>::ForwardFromTo(int start, int end) {
   CHECK_GE(start, 0);
   CHECK_LT(end, layers_.size());
   Dtype loss = 0;
   for (int i = start; i <= end; ++i) {
-    // LOG(ERROR) << "Forwarding " << layer_names_[i];
+    for (int c = 0; c < before_forward_.size(); ++c) {
+      before_forward_[c]->run(i);
+    }
     Dtype layer_loss = layers_[i]->Forward(bottom_vecs_[i], top_vecs_[i]);
     loss += layer_loss;
     if (debug_info_) { ForwardDebugInfo(i); }
+    for (int c = 0; c < after_forward_.size(); ++c) {
+      after_forward_[c]->run(i);
+    }
   }
   return loss;
 }
-
+// 前向传播
 template <typename Dtype>
 Dtype Net<Dtype>::ForwardFrom(int start) {
   return ForwardFromTo(start, layers_.size() - 1);
@@ -591,14 +568,20 @@ void Net<Dtype>::BackwardFromTo(int start, int end) {
   CHECK_GE(end, 0);
   CHECK_LT(start, layers_.size());
   for (int i = start; i >= end; --i) {
+    for (int c = 0; c < before_backward_.size(); ++c) {
+      before_backward_[c]->run(i);
+    }
     if (layer_need_backward_[i]) {
       layers_[i]->Backward(
           top_vecs_[i], bottom_need_backward_[i], bottom_vecs_[i]);
       if (debug_info_) { BackwardDebugInfo(i); }
     }
+    for (int c = 0; c < after_backward_.size(); ++c) {
+      after_backward_[c]->run(i);
+    }
   }
 }
-
+//  前向debug传播信息
 template <typename Dtype>
 void Net<Dtype>::ForwardDebugInfo(const int layer_id) {
   for (int top_id = 0; top_id < top_vecs_[layer_id].size(); ++top_id) {
@@ -677,7 +660,7 @@ void Net<Dtype>::UpdateDebugInfo(const int param_id) {
         << " diff: " << diff_abs_val_mean;
   }
 }
-
+// 共享训练网络
 template <typename Dtype>
 void Net<Dtype>::ShareTrainedLayersWith(const Net* other) {
   int num_source_layers = other->layers().size();
@@ -786,8 +769,7 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
 
 template <typename Dtype>
 void Net<Dtype>::CopyTrainedLayersFrom(const string trained_filename) {
-  if (trained_filename.size() >= 3 &&
-      trained_filename.compare(trained_filename.size() - 3, 3, ".h5") == 0) {
+  if (H5Fis_hdf5(trained_filename.c_str())) {
     CopyTrainedLayersFromHDF5(trained_filename);
   } else {
     CopyTrainedLayersFromBinaryProto(trained_filename);
@@ -927,7 +909,7 @@ void Net<Dtype>::Update() {
     learnable_params_[i]->Update();
   }
 }
-
+// 清空网络差分
 template <typename Dtype>
 void Net<Dtype>::ClearParamDiffs() {
   for (int i = 0; i < learnable_params_.size(); ++i) {
@@ -948,7 +930,7 @@ void Net<Dtype>::ClearParamDiffs() {
     }
   }
 }
-
+//  共享权重
 template <typename Dtype>
 void Net<Dtype>::ShareWeights() {
   for (int i = 0; i < params_.size(); ++i) {
@@ -957,12 +939,12 @@ void Net<Dtype>::ShareWeights() {
     params_[i]->ShareDiff(*params_[param_owners_[i]]);
   }
 }
-
+//  从blob name 判断有无
 template <typename Dtype>
 bool Net<Dtype>::has_blob(const string& blob_name) const {
   return blob_names_index_.find(blob_name) != blob_names_index_.end();
 }
-
+//  从blob name 返回blob数据
 template <typename Dtype>
 const shared_ptr<Blob<Dtype> > Net<Dtype>::blob_by_name(
     const string& blob_name) const {
@@ -975,12 +957,12 @@ const shared_ptr<Blob<Dtype> > Net<Dtype>::blob_by_name(
   }
   return blob_ptr;
 }
-
+//  从layer name判断有无
 template <typename Dtype>
 bool Net<Dtype>::has_layer(const string& layer_name) const {
   return layer_names_index_.find(layer_name) != layer_names_index_.end();
 }
-
+//  从layer name 返回层数据
 template <typename Dtype>
 const shared_ptr<Layer<Dtype> > Net<Dtype>::layer_by_name(
     const string& layer_name) const {

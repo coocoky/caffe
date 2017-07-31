@@ -56,10 +56,10 @@ DEFINE_string(sighup_effect, "snapshot",
              "snapshot, stop or none.");
 
 // A simple registry for caffe commands.
-typedef int (*BrewFunction)();
+typedef int (*BrewFunction)();  //  即将发生函数
 typedef std::map<caffe::string, BrewFunction> BrewMap;
 BrewMap g_brew_map;
-
+// 注册函数的形式, 解析参数
 #define RegisterBrewFunction(func) \
 namespace { \
 class __Registerer_##func { \
@@ -70,7 +70,7 @@ class __Registerer_##func { \
 }; \
 __Registerer_##func g_registerer_##func; \
 }
-
+//   得到函数指针
 static BrewFunction GetBrewFunction(const caffe::string& name) {
   if (g_brew_map.count(name)) {
     return g_brew_map[name];
@@ -84,11 +84,11 @@ static BrewFunction GetBrewFunction(const caffe::string& name) {
     return NULL;  // not reachable, just to suppress old compiler warnings.
   }
 }
-
+//  得到gpu
 // Parse GPU ids or use all available devices
 static void get_gpus(vector<int>* gpus) {
   if (FLAGS_gpu == "all") {
-    int count = 0;
+    int count = 0; // 得到cudaGetDeviceCount, 得到设备数
 #ifndef CPU_ONLY
     CUDA_CHECK(cudaGetDeviceCount(&count));
 #else
@@ -107,7 +107,7 @@ static void get_gpus(vector<int>* gpus) {
     CHECK_EQ(gpus->size(), 0);
   }
 }
-
+// 解析caffe阶段
 // Parse phase from flags
 caffe::Phase get_phase_from_flags(caffe::Phase default_value) {
   if (FLAGS_phase == "")
@@ -119,7 +119,7 @@ caffe::Phase get_phase_from_flags(caffe::Phase default_value) {
   LOG(FATAL) << "phase must be \"TRAIN\" or \"TEST\"";
   return caffe::TRAIN;  // Avoid warning
 }
-
+// 解析stages
 // Parse stages from flags
 vector<string> get_stages_from_flags() {
   vector<string> stages;
@@ -145,7 +145,7 @@ int device_query() {
   return 0;
 }
 RegisterBrewFunction(device_query);
-
+// 从model_list列表copy CopyLayers
 // Load the weights from the specified caffemodel(s) into the train and
 // test nets.
 void CopyLayers(caffe::Solver<float>* solver, const std::string& model_list) {
@@ -195,6 +195,7 @@ int train() {
   // If the gpus flag is not provided, allow the mode and device to be set
   // in the solver prototxt.
   if (FLAGS_gpu.size() == 0
+      && solver_param.has_solver_mode()
       && solver_param.solver_mode() == caffe::SolverParameter_SolverMode_GPU) {
       if (solver_param.has_device_id()) {
           FLAGS_gpu = "" +
@@ -225,7 +226,7 @@ int train() {
     solver_param.set_device_id(gpus[0]);
     Caffe::SetDevice(gpus[0]);
     Caffe::set_mode(Caffe::GPU);
-    Caffe::set_solver_count(gpus.size());
+    Caffe::set_solver_count(gpus.size()); // 设置gpu size
   }
 
   caffe::SignalHandler signal_handler(
@@ -244,11 +245,15 @@ int train() {
     CopyLayers(solver.get(), FLAGS_weights);
   }
 
+  LOG(INFO) << "Starting Optimization";
   if (gpus.size() > 1) {
-    caffe::P2PSync<float> sync(solver, NULL, solver->param());
-    sync.Run(gpus);
+#ifdef USE_NCCL
+    caffe::NCCL<float> nccl(solver);
+    nccl.Run(gpus, FLAGS_snapshot.size() > 0 ? FLAGS_snapshot.c_str() : NULL);
+#else
+    LOG(FATAL) << "Multi-GPU execution not available - rebuild with USE_NCCL";
+#endif
   } else {
-    LOG(INFO) << "Starting Optimization";
     solver->Solve();
   }
   LOG(INFO) << "Optimization Done.";
@@ -257,7 +262,7 @@ int train() {
 RegisterBrewFunction(train);
 
 
-// Test: score a model.
+// Test: score a model. // 测试
 int test() {
   CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition to score.";
   CHECK_GT(FLAGS_weights.size(), 0) << "Need model weights to score.";
@@ -279,7 +284,7 @@ int test() {
     LOG(INFO) << "Use CPU.";
     Caffe::set_mode(Caffe::CPU);
   }
-  // Instantiate the caffe net.
+  // Instantiate the caffe net. 初始化测试网络
   Net<float> caffe_net(FLAGS_model, caffe::TEST, FLAGS_level, &stages);
   caffe_net.CopyTrainedLayersFrom(FLAGS_weights);
   LOG(INFO) << "Running for " << FLAGS_iterations << " iterations.";
@@ -329,8 +334,8 @@ int test() {
 }
 RegisterBrewFunction(test);
 
-
-// Time: benchmark the execution time of a model.
+// 时间
+// Time: benchmark the execution time of a model. 
 int time() {
   CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition to time.";
   caffe::Phase phase = get_phase_from_flags(caffe::TRAIN);
@@ -440,7 +445,7 @@ int main(int argc, char** argv) {
 #ifdef WITH_PYTHON_LAYER
     try {
 #endif
-      return GetBrewFunction(caffe::string(argv[1]))();
+      return GetBrewFunction(caffe::string(argv[1]))(); //  argv[1] train test
 #ifdef WITH_PYTHON_LAYER
     } catch (bp::error_already_set) {
       PyErr_Print();

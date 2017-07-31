@@ -34,8 +34,8 @@ class BlockingQueue {
    */
   class sync;
 
-  std::queue<T> queue_;
-  shared_ptr<sync> sync_;
+  std::queue<T> queue_;      // 序列类
+  shared_ptr<sync> sync_;    // 同步对象
 
 DISABLE_COPY_AND_ASSIGN(BlockingQueue);
 };

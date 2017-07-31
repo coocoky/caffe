@@ -89,6 +89,12 @@ const Dtype* Blob<Dtype>::cpu_data() const {
 template <typename Dtype>
 void Blob<Dtype>::set_cpu_data(Dtype* data) {
   CHECK(data);
+  // Make sure CPU and GPU sizes remain equal
+  size_t size = count_ * sizeof(Dtype);
+  if (data_->size() != size) {
+    data_.reset(new SyncedMemory(size));
+    diff_.reset(new SyncedMemory(size));
+  }
   data_->set_cpu_data(data);
 }
 
@@ -96,6 +102,18 @@ template <typename Dtype>
 const Dtype* Blob<Dtype>::gpu_data() const {
   CHECK(data_);
   return (const Dtype*)data_->gpu_data();
+}
+
+template <typename Dtype>
+void Blob<Dtype>::set_gpu_data(Dtype* data) {
+  CHECK(data);
+  // Make sure CPU and GPU sizes remain equal
+  size_t size = count_ * sizeof(Dtype);
+  if (data_->size() != size) {
+    data_.reset(new SyncedMemory(size));
+    diff_.reset(new SyncedMemory(size));
+  }
+  data_->set_gpu_data(data);
 }
 
 template <typename Dtype>
@@ -133,13 +151,13 @@ Dtype* Blob<Dtype>::mutable_gpu_diff() {
   CHECK(diff_);
   return static_cast<Dtype*>(diff_->mutable_gpu_data());
 }
-
+//  共享数据, 别的权重到本权重
 template <typename Dtype>
 void Blob<Dtype>::ShareData(const Blob& other) {
   CHECK_EQ(count_, other.count());
   data_ = other.data();
 }
-
+//  共享差分, 别的差分到本差分
 template <typename Dtype>
 void Blob<Dtype>::ShareDiff(const Blob& other) {
   CHECK_EQ(count_, other.count());

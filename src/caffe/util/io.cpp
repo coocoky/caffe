@@ -30,7 +30,7 @@ using google::protobuf::io::CodedInputStream;
 using google::protobuf::io::ZeroCopyOutputStream;
 using google::protobuf::io::CodedOutputStream;
 using google::protobuf::Message;
-
+// 文件中读,  google::protobuf::TextFormat::解析, call by 网络规划
 bool ReadProtoFromTextFile(const char* filename, Message* proto) {
   int fd = open(filename, O_RDONLY);
   CHECK_NE(fd, -1) << "File not found: " << filename;
@@ -101,7 +101,7 @@ cv::Mat ReadImageToCVMat(const string& filename,
 cv::Mat ReadImageToCVMat(const string& filename) {
   return ReadImageToCVMat(filename, 0, 0, true);
 }
-
+// 扩展匹配
 // Do the file extension and encoding match?
 static bool matchExt(const std::string & fn,
                      std::string en) {
@@ -115,7 +115,7 @@ static bool matchExt(const std::string & fn,
     return true;
   return false;
 }
-
+//  读图像到datum
 bool ReadImageToDatum(const string& filename, const int label,
     const int height, const int width, const bool is_color,
     const std::string & encoding, Datum* datum) {
@@ -123,10 +123,10 @@ bool ReadImageToDatum(const string& filename, const int label,
   if (cv_img.data) {
     if (encoding.size()) {
       if ( (cv_img.channels() == 3) == is_color && !height && !width &&
-          matchExt(filename, encoding) )
+          matchExt(filename, encoding) )  //  
         return ReadFileToDatum(filename, label, datum);
       std::vector<uchar> buf;
-      cv::imencode("."+encoding, cv_img, buf);
+      cv::imencode("."+encoding, cv_img, buf); //   编码
       datum->set_data(std::string(reinterpret_cast<char*>(&buf[0]),
                       buf.size()));
       datum->set_label(label);
@@ -148,8 +148,8 @@ bool ReadFileToDatum(const string& filename, const int label,
 
   fstream file(filename.c_str(), ios::in|ios::binary|ios::ate);
   if (file.is_open()) {
-    size = file.tellg();
-    std::string buffer(size, ' ');
+    size = file.tellg();  //  文件size
+    std::string buffer(size, ' ');  // 初始化字符串buffer
     file.seekg(0, ios::beg);
     file.read(&buffer[0], size);
     file.close();
@@ -161,7 +161,7 @@ bool ReadFileToDatum(const string& filename, const int label,
     return false;
   }
 }
-
+//  解码
 #ifdef USE_OPENCV
 cv::Mat DecodeDatumToCVMatNative(const Datum& datum) {
   cv::Mat cv_img;
@@ -208,7 +208,7 @@ bool DecodeDatum(Datum* datum, bool is_color) {
     return false;
   }
 }
-
+//  
 void CVMatToDatum(const cv::Mat& cv_img, Datum* datum) {
   CHECK(cv_img.depth() == CV_8U) << "Image data type must be unsigned byte";
   datum->set_channels(cv_img.channels());
