@@ -47,6 +47,7 @@ def extract_seconds(input_file, output_file):
     log_created_year = get_log_created_year(input_file)
     start_datetime = get_start_time(lines, log_created_year)
     assert start_datetime, 'Start time not found'
+    
 
     out = open(output_file, 'w')
     for line in lines:
