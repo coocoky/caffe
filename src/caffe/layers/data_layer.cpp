@@ -10,14 +10,14 @@
 #include "caffe/util/benchmark.hpp"
 
 namespace caffe {
-
+// 初始化
 template <typename Dtype>
 DataLayer<Dtype>::DataLayer(const LayerParameter& param)
   : BasePrefetchingDataLayer<Dtype>(param),
     offset_() {
-  db_.reset(db::GetDB(param.data_param().backend()));
-  db_->Open(param.data_param().source(), db::READ);
-  cursor_.reset(db_->NewCursor());
+  db_.reset(db::GetDB(param.data_param().backend())); // 
+  db_->Open(param.data_param().source(), db::READ); // 返回数据
+  cursor_.reset(db_->NewCursor()); // 数据光标
 }
 
 template <typename Dtype>

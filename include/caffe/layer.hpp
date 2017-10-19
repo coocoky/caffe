@@ -1,3 +1,10 @@
+//layer是基本类。
+//深度网络：一层一层的layer，相互之间通过blob传输数据连接。
+//layer必须要实现一个forward function，前递函数功能可以自己定义。
+//在forward中，会从Input也就是layer的bottom（前一层）中获取blob，计算输出的blob
+//实现一个反向传播，根据他们的Input的blob以及outPut的error gradient梯度误差计算得到该层的梯度误差
+
+  
 #ifndef CAFFE_LAYER_H_
 #define CAFFE_LAYER_H_
 
@@ -37,12 +44,18 @@ class Layer {
    * to SetUp(), where the dimensions of the bottom blobs are provided to the
    * layer.
    */
+    //Layer中三个重要参数：
+   //1.layer_param_:是protobuf文件中存储的layer参数
+   //2.blobs_:存储layer的参数，在程序中用的，layer学习到的参数
+   //3.param_propagate_down_:这个bool表示是否计算各个blob参数的diff，即传播误差。
   explicit Layer(const LayerParameter& param)
     : layer_param_(param) {
       // Set phase and copy blobs (if there are any).
       phase_ = param.phase();
       if (layer_param_.blobs_size() > 0) {
         blobs_.resize(layer_param_.blobs_size());
+         //在初始化列表初始化LayerParameter，之后blobs_这里存放的
+        //  是一个指向blob类的shared_ptr指针的一个vector，这里是申请空间，然后将出传入的layer_param中的blob拷贝过来
         for (int i = 0; i < layer_param_.blobs_size(); ++i) {
           blobs_[i].reset(new Blob<Dtype>());
           blobs_[i]->FromProto(layer_param_.blobs(i));
@@ -64,12 +77,13 @@ class Layer {
    * Sets up the loss weight multiplier blobs for any non-zero loss weights.
    * This method may not be overridden.
    */
+   //根据实际的参数设置进行实现，对各种类型的参数初始化；
   void SetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-    CheckBlobCounts(bottom, top);
-    LayerSetUp(bottom, top);
-    Reshape(bottom, top);
-    SetLossWeights(top);
+    CheckBlobCounts(bottom, top);//1.check这个bottom和top的blob是否正确
+    LayerSetUp(bottom, top);//2.调用Layersetup对每一具体的层做进一步设置
+    Reshape(bottom, top);//3.再做reshape来设置top blobs和internal buffer.
+    SetLossWeights(top);//4.最后，设置loss weight multiplier的blob对每个非零的loss和weight，一般这个方法被继承后不会被重写
   }
 
   /**
@@ -88,6 +102,9 @@ class Layer {
    * <code>Reshape</code>, which will be called before the forward pass to
    * adjust the top blob sizes.
    */
+   //LayerSetup就是对具体某一个layer的setup，被上面的那个函数所调用，
+  //  ShareInParallel和IsShared和SetShared分别是用来返回并行状态和获取这一Layer是否被多个nets所共享。
+//默认：除了data layer都是关闭的。在多个GPU下的Train阶段以及share是true的情况下，is_shared将会被置成true
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {}
 
@@ -103,6 +120,7 @@ class Layer {
    * and making any other necessary adjustments so that the layer can
    * accommodate the bottom blobs.
    */
+    //这个reshape主要是layer用来根据输入的blob调节Internal buffer 以及输出的Blob
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) = 0;
 
@@ -123,6 +141,8 @@ class Layer {
    *
    * Your layer should implement Forward_cpu and (optionally) Forward_gpu.
    */
+   //Forward：是一个装饰器，继承之后再调用的调用其相应的forward_cpu或者forward_gpu，
+//根据输入的Input data blob计算相应的output data blob,同时，会反应这一层Layer的total loss
   inline Dtype Forward(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
 
@@ -147,6 +167,10 @@ class Layer {
    *
    * Your layer should implement Backward_cpu and (optionally) Backward_gpu.
    */
+   //Backward：实现的是反向传播，也就是给定top blob的error gradient计算得到bottom的error gradient.
+//输入时output blobs,在output blobs里面的diff存储的就是其相应的error gradients.
+//其中propagate_down这个参数跟Bottom的长度是一样的，每一个index用来指定是否需要反向传播error gradients 到对应的bottom blob。
+//bottom里面的diff区域存放的是Backward计算出来相应的gradient error
   inline void Backward(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down,
       const vector<Blob<Dtype>*>& bottom);
@@ -460,7 +484,7 @@ inline void Layer<Dtype>::Backward(const vector<Blob<Dtype>*>& top,
     LOG(FATAL) << "Unknown caffe mode.";
   }
 }
-
+// 序列化网络层参数到协议缓存，最终是调用blob写入协议缓存。
 // Serialize LayerParameter to protocol buffer
 template <typename Dtype>
 void Layer<Dtype>::ToProto(LayerParameter* param, bool write_diff) {

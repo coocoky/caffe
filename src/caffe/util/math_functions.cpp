@@ -44,7 +44,8 @@ void caffe_cpu_gemv<double>(const CBLAS_TRANSPOSE TransA, const int M,
     const double beta, double* y) {
   cblas_dgemv(CblasRowMajor, TransA, M, N, alpha, A, N, x, 1, beta, y, 1);
 }
-
+// 功能： Y=alpha*X+Y 
+// N：为X和Y中element的个数
 template <>
 void caffe_axpy<float>(const int N, const float alpha, const float* X,
     float* Y) { cblas_saxpy(N, alpha, X, 1, Y, 1); }
@@ -108,7 +109,8 @@ template <>
 void caffe_scal<float>(const int N, const float alpha, float *X) {
   cblas_sscal(N, alpha, X, 1);
 }
-
+// 功能：X = alpha*X 
+// N： X中element的个数
 template <>
 void caffe_scal<double>(const int N, const double alpha, double *X) {
   cblas_dscal(N, alpha, X, 1);
@@ -336,7 +338,10 @@ double caffe_cpu_strided_dot<double>(const int n, const double* x,
     const int incx, const double* y, const int incy) {
   return cblas_ddot(n, x, incx, y, incy);
 }
-
+/*
+功能： 返回 vector X 和 vector Y 的内积。
+incx， incy ： 步长，即每隔incx 或 incy 个element 进行操作。
+*/
 template <typename Dtype>
 Dtype caffe_cpu_dot(const int n, const Dtype* x, const Dtype* y) {
   return caffe_cpu_strided_dot(n, x, 1, y, 1);

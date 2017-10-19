@@ -76,7 +76,7 @@ void SGDSolver<Dtype>::PreSolve() {
     temp_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));
   }
 }
-
+// 修建梯度
 template <typename Dtype>
 void SGDSolver<Dtype>::ClipGradients() {
   const Dtype clip_gradients = this->param_.clip_gradients();
@@ -97,32 +97,45 @@ void SGDSolver<Dtype>::ClipGradients() {
     }
   }
 }
-
+// 一次完整的训练流程包括一次前向传输和一次反向传输，分别计算模型的loss和梯度，
+// 通过梯度数据计算出参数的更新，更新是通过在Step函数中调用ApplyUpdate函数完成的
 template <typename Dtype>
 void SGDSolver<Dtype>::ApplyUpdate() {
+   //根据设置的lr_policy，依据对应的规则计算当前迭代的learning rete的值  
   Dtype rate = GetLearningRate();
+  //是否输出当前的迭代次数和学习率数据 
   if (this->param_.display() && this->iter_ % this->param_.display() == 0) {
     LOG_IF(INFO, Caffe::root_solver()) << "Iteration " << this->iter_
         << ", lr = " << rate;
   }
+     //避免梯度爆炸，如果梯度的L1或L2范数超过了某个上限值，则将梯度减小  
   ClipGradients();
+   //更新所有参数，包括卷积层和池化层的卷积核和偏置两组参数  
   for (int param_id = 0; param_id < this->net_->learnable_params().size();
        ++param_id) {
+         //将参数的梯度归一化，除以iter_size，其作用是保证实际的batch_size=iter_size*batch_size 
     Normalize(param_id);
+     //将正则化部分的梯度存入到每个参数的梯度中  
     Regularize(param_id);
+     //计算SGD算法的梯度（momentum等） 
     ComputeUpdateValue(param_id, rate);
   }
+    //调用Net::Update更新参数 
   this->net_->Update();
 }
 
 template <typename Dtype>
 void SGDSolver<Dtype>::Normalize(int param_id) {
+  //如果训练数据的批次数为1，则不进行归一化，直接返回  
   if (this->param_.iter_size() == 1) { return; }
+  //获取所有要优化的参数  
   // Scale gradient to counterbalance accumulation.
   const vector<Blob<Dtype>*>& net_params = this->net_->learnable_params();
+  //归一化系数  
   const Dtype accum_normalization = Dtype(1.) / this->param_.iter_size();
   switch (Caffe::mode()) {
   case Caffe::CPU: {
+     //CPU中执行归一化操作的函数  
     caffe_scal(net_params[param_id]->count(), accum_normalization,
         net_params[param_id]->mutable_cpu_diff());
     break;
@@ -143,17 +156,22 @@ void SGDSolver<Dtype>::Normalize(int param_id) {
 
 template <typename Dtype>
 void SGDSolver<Dtype>::Regularize(int param_id) {
+  //获取所有要优化的参数  
   const vector<Blob<Dtype>*>& net_params = this->net_->learnable_params();
+  //获取所有要优化的参数的权重衰减向量  
   const vector<float>& net_params_weight_decay =
       this->net_->params_weight_decay();
+      //获取网络模型整体的权重衰减  
   Dtype weight_decay = this->param_.weight_decay();
+  //获取网络的正则化类型，L1或者L2 
   string regularization_type = this->param_.regularization_type();
+   //每一个参数的权重衰减等于每个参数的权重衰减乘以网络整体的权重衰减  
   Dtype local_decay = weight_decay * net_params_weight_decay[param_id];
   switch (Caffe::mode()) {
   case Caffe::CPU: {
     if (local_decay) {
       if (regularization_type == "L2") {
-        // add weight decay
+        // add weight decay  //执行正则化，L2的梯度diff_=weight_decay*data_+diff_  
         caffe_axpy(net_params[param_id]->count(),
             local_decay,
             net_params[param_id]->cpu_data(),

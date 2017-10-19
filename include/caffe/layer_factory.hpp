@@ -127,7 +127,7 @@ class LayerRegisterer {
 #define REGISTER_LAYER_CREATOR(type, creator)                                  \
   static LayerRegisterer<float> g_creator_f_##type(#type, creator<float>);     \
   static LayerRegisterer<double> g_creator_d_##type(#type, creator<double>)    \
-
+// 注册层
 #define REGISTER_LAYER_CLASS(type)                                             \
   template <typename Dtype>                                                    \
   shared_ptr<Layer<Dtype> > Creator_##type##Layer(const LayerParameter& param) \

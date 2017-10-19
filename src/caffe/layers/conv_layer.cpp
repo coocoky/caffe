@@ -3,7 +3,7 @@
 #include "caffe/layers/conv_layer.hpp"
 
 namespace caffe {
-
+// 计算输出shape
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::compute_output_shape() {
   const int* kernel_shape_data = this->kernel_shape_.cpu_data();
@@ -20,7 +20,7 @@ void ConvolutionLayer<Dtype>::compute_output_shape() {
     this->output_shape_.push_back(output_dim);
   }
 }
-
+// 前向传播
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {

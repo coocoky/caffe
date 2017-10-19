@@ -328,17 +328,17 @@ void DataTransformer<Dtype>::Transform(const cv::Mat& cv_img,
 template<typename Dtype>
 void DataTransformer<Dtype>::Transform(Blob<Dtype>* input_blob,
                                        Blob<Dtype>* transformed_blob) {
-  const int crop_size = param_.crop_size();
-  const int input_num = input_blob->num();
-  const int input_channels = input_blob->channels();
-  const int input_height = input_blob->height();
-  const int input_width = input_blob->width();
+  const int crop_size = param_.crop_size();        // 80 80 
+  const int input_num = input_blob->num();  // 
+  const int input_channels = input_blob->channels(); // 3
+  const int input_height = input_blob->height();  // 90
+  const int input_width = input_blob->width();    // 90
 
   if (transformed_blob->count() == 0) {
     // Initialize transformed_blob with the right shape.
     if (crop_size) {
       transformed_blob->Reshape(input_num, input_channels,
-                                crop_size, crop_size);
+                                crop_size, crop_size);  // 1 3 80 80 
     } else {
       transformed_blob->Reshape(input_num, input_channels,
                                 input_height, input_width);
@@ -346,20 +346,20 @@ void DataTransformer<Dtype>::Transform(Blob<Dtype>* input_blob,
   }
 
   const int num = transformed_blob->num();
-  const int channels = transformed_blob->channels();
-  const int height = transformed_blob->height();
-  const int width = transformed_blob->width();
-  const int size = transformed_blob->count();
+  const int channels = transformed_blob->channels();   // 3 
+  const int height = transformed_blob->height();    // 80 
+  const int width = transformed_blob->width();  // 80
+  const int size = transformed_blob->count();   
 
   CHECK_LE(input_num, num);
   CHECK_EQ(input_channels, channels);
-  CHECK_GE(input_height, height);
+  CHECK_GE(input_height, height);        // 
   CHECK_GE(input_width, width);
 
 
-  const Dtype scale = param_.scale();
+  const Dtype scale = param_.scale();    // 
   const bool do_mirror = param_.mirror() && Rand(2);
-  const bool has_mean_file = param_.has_mean_file();
+  const bool has_mean_file = param_.has_mean_file(); // 1
   const bool has_mean_values = mean_values_.size() > 0;
 
   int h_off = 0;
@@ -368,10 +368,10 @@ void DataTransformer<Dtype>::Transform(Blob<Dtype>* input_blob,
     CHECK_EQ(crop_size, height);
     CHECK_EQ(crop_size, width);
     // We only do random crop when we do training.
-    if (phase_ == TRAIN) {
+    if (phase_ == TRAIN) {     
       h_off = Rand(input_height - crop_size + 1);
       w_off = Rand(input_width - crop_size + 1);
-    } else {
+    } else {         //  中心裁剪
       h_off = (input_height - crop_size) / 2;
       w_off = (input_width - crop_size) / 2;
     }

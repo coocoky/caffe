@@ -3,7 +3,7 @@
 #include "caffe/layers/input_layer.hpp"
 
 namespace caffe {
-
+// 输入层, 没用bottom
 template <typename Dtype>
 void InputLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {

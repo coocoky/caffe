@@ -8,7 +8,10 @@
 #include "caffe/util/insert_splits.hpp"
 
 namespace caffe {
-
+// 底层一个输出blob对应多个上层的情况，则要在加入分裂层，形成新的网络。
+// 这么做的主要原因是多个层反传给该blob的梯度需要累加。
+// 例如：LeNet网络中的数据层的top label blob对应两个输入层，
+// 分别是accuracy层和loss层，那么需要在数据层在插入一层
 void InsertSplits(const NetParameter& param, NetParameter* param_split) {
   // Initialize by copying from the input NetParameter.
   param_split->CopyFrom(param);

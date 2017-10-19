@@ -1,3 +1,5 @@
+// solver的作用就是交替低啊用前向（forward）算法和后向（backward）算法来更新参数，从而最小化loss，实际上就是一种迭代的优化算法。
+
 #include <cstdio>
 
 #include <string>
@@ -39,6 +41,10 @@ Solver<Dtype>::Solver(const string& param_file)
   Init(param);
 }
 //  初始化网络参数, 
+// 1. 设置随机数种子 
+// 2. 申请一块Net空间以下面的构造函数进行初始化 
+// param_file=train_net_，net_指向这块空间 
+// 3. 如果有test_net，则申请一块Net空间，test_net_指向这块空间 
 template <typename Dtype>
 void Solver<Dtype>::Init(const SolverParameter& param) {
   LOG_IF(INFO, Caffe::root_solver()) << "Initializing solver from parameters: "
@@ -176,19 +182,23 @@ void Solver<Dtype>::InitTestNets() {
     test_nets_[i]->set_debug_info(param_.debug_info());
   }
 }
-// 几个step, 一阶段
+// 几个step, 一阶段, //Step函数完成实际的逐步迭代优化过程  
 template <typename Dtype>
 void Solver<Dtype>::Step(int iters) {
+   //设置开始的迭代次数，如果之前设置了是从snapshot中恢复的，则会从  
+    //snapshot的训练状态继续执行训练
   const int start_iter = iter_; // 
-  const int stop_iter = iter_ + iters;
-  int average_loss = this->param_.average_loss(); // 平均损失
-  losses_.clear();  // 损失容器置空
-  smoothed_loss_ = 0;
+  const int stop_iter = iter_ + iters; ////总的迭代次数 
+  //获取设置的要计算之前多少次的loss均值，默认的average_loss为1  
+  int average_loss = this->param_.average_loss(); 
+  losses_.clear();  // 损失容器置空 //清除保存loss的向量  
+  smoothed_loss_ = 0; //平均loss初始化为0  
   iteration_timer_.Start();
-
+ //执行迭代  
   while (iter_ < stop_iter) {
-    // zero-init the params
+    // zero-init the params   //清零上一次反向传输过程中产生的梯度数据  
     net_->ClearParamDiffs(); // 初始化差分
+      //判断条件，是否执行一次所有测试  
     if (param_.test_interval() && iter_ % param_.test_interval() == 0
         && (iter_ > 0 || param_.test_initialization())) {
       if (Caffe::root_solver()) {
@@ -203,17 +213,23 @@ void Solver<Dtype>::Step(int iters) {
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_start();
     }
+    //是否输出loss等信息  
     const bool display = param_.display() && iter_ % param_.display() == 0;
     net_->set_debug_info(display && param_.debug_info());
+     //iter_size是在solver.prototxt中设置的，把数据分为多少批次分开迭代，对应还有一个名称为  
+    //batch_size的变量，是在网络中定义的，batch_size定义每批次包含的样本数量，把一个大的  
+    //样本数量分批次训练可以提高训练效率，总的样本数量=iter_size*batch_size 
     // accumulate the loss and gradient
     Dtype loss = 0;
     for (int i = 0; i < param_.iter_size(); ++i) {
-      loss += net_->ForwardBackward();
+      loss += net_->ForwardBackward(); // //累加所有批次的平均误差 
     }
-    loss /= param_.iter_size();
+    loss /= param_.iter_size(); ////计算批次的平均误差 
+    //更新输出的当前的average_loss个样本的平均loss  
     // average the loss across iterations for smoothed reporting
     UpdateSmoothedLoss(loss, start_iter, average_loss);
     if (display) {
+      //输出迭代次数，平均loss  
       float lapse = iteration_timer_.Seconds();
       float per_s = (iter_ - iterations_last_) / (lapse ? lapse : 1);
       LOG_IF(INFO, Caffe::root_solver()) << "Iteration " << iter_
@@ -244,12 +260,14 @@ void Solver<Dtype>::Step(int iters) {
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_gradients_ready();
     }
+    //执行网络更新，每一组网络中的参数的更新都是不同类型的solver实现各自的  
+    //ApplyUpdate函数中完成的  
     ApplyUpdate();
 
     // Increment the internal iter_ counter -- its value should always indicate
     // the number of times the weights have been updated.
     ++iter_;
-
+    // 每次iter, 获取操作
     SolverAction::Enum request = GetRequestedAction();
 
     // Save a snapshot if needed.
@@ -259,23 +277,26 @@ void Solver<Dtype>::Step(int iters) {
          (request == SolverAction::SNAPSHOT)) {
       Snapshot();
     }
-    if (SolverAction::STOP == request) {
+    
+    if (SolverAction::STOP == request) { 
       requested_early_exit_ = true;
       // Break out of training loop.
       break;
     }
   }
 }
-
+//
 template <typename Dtype>
 void Solver<Dtype>::Solve(const char* resume_file) {
+  //检查是否是root_solver，有多个GPU的情况下，允许设置多个solver，GPU间并行工作，  
+    //第一个solver设置为root_solver
   CHECK(Caffe::root_solver());
-  LOG(INFO) << "Solving " << net_->name();
-  LOG(INFO) << "Learning Rate Policy: " << param_.lr_policy();
+  LOG(INFO) << "Solving " << net_->name(); ////网络名称 
+  LOG(INFO) << "Learning Rate Policy: " << param_.lr_policy(); // //学习策略 
 
   // Initialize to false every time we start solving.
   requested_early_exit_ = false;
-
+//是否需要从指针所指向的内存读取出之前的训练状态并恢复 
   if (resume_file) {
     LOG(INFO) << "Restoring previous solver status from " << resume_file;
     Restore(resume_file);
@@ -284,7 +305,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
   int start_iter = iter_;
-  Step(param_.max_iter() - iter_);
+  Step(param_.max_iter() - iter_);  //逐步迭代开始  
   // If we haven't already, save a snapshot after optimization, unless
   // overridden by setting snapshot_after_train := false
   if (param_.snapshot_after_train()

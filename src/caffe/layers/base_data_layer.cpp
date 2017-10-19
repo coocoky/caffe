@@ -10,13 +10,13 @@
 #include "caffe/util/blocking_queue.hpp"
 
 namespace caffe {
-
+// 构造函数就是初始化数据变换参数  
 template <typename Dtype>
 BaseDataLayer<Dtype>::BaseDataLayer(const LayerParameter& param)
     : Layer<Dtype>(param),
       transform_param_(param.transform_param()) {
 }
-
+// 初始化的时候根据top的大小来确定，如果是1表明只输出数据，而不输出类标  
 template <typename Dtype>
 void BaseDataLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
@@ -25,13 +25,18 @@ void BaseDataLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   } else {
     output_labels_ = true;
   }
+  // 初始化一个DataTransformer实例，便于对数据进行预处理  
   data_transformer_.reset(
       new DataTransformer<Dtype>(transform_param_, this->phase_));
+       // 初始化种子 
   data_transformer_->InitRand();
   // The subclasses should setup the size of bottom and top
+  // 执行数据层的初始化  
   DataLayerSetUp(bottom, top);
 }
-
+// BasePrefetchingDataLayer层是继承于BaseDataLayer的  
+// 是预取层的基类  
+// 构造函数，初始化预取的队列,free和full 
 template <typename Dtype>
 BasePrefetchingDataLayer<Dtype>::BasePrefetchingDataLayer(
     const LayerParameter& param)
@@ -43,16 +48,22 @@ BasePrefetchingDataLayer<Dtype>::BasePrefetchingDataLayer(
     prefetch_free_.push(prefetch_[i].get());
   }
 }
-
+// 进行层的初始化  
 template <typename Dtype>
 void BasePrefetchingDataLayer<Dtype>::LayerSetUp(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+      // 首先执行基类BaseDataLayer的层初始化  
   BaseDataLayer<Dtype>::LayerSetUp(bottom, top);
 
   // Before starting the prefetch thread, we make cpu_data and gpu_data
   // calls so that the prefetch thread does not accidentally make simultaneous
   // cudaMalloc calls when the main thread is running. In some GPUs this
   // seems to cause failures if we do not so.
+
+  // 在开启预取线程的时候，需要让cpu数据和gpu数据分配空间  
+  // 这样才能够避免在某些GPU上出现问题  
+  
+  // 首先是CPU  
   for (int i = 0; i < prefetch_.size(); ++i) {
     prefetch_[i]->data_.mutable_cpu_data();
     if (this->output_labels_) {
@@ -70,16 +81,20 @@ void BasePrefetchingDataLayer<Dtype>::LayerSetUp(
   }
 #endif
   DLOG(INFO) << "Initializing prefetch";
+   // 初始化随机数种子  
   this->data_transformer_->InitRand();
+  // 开启线程  
   StartInternalThread();
   DLOG(INFO) << "Prefetch initialized.";
 }
-
+// 在StartInternalThread开启线程后就会执行下面自己定义的函数  
+// 这个就是自己定义的函数，让线程去执行的  
 template <typename Dtype>
 void BasePrefetchingDataLayer<Dtype>::InternalThreadEntry() {
 #ifndef CPU_ONLY
   cudaStream_t stream;
   if (Caffe::mode() == Caffe::GPU) {
+    // 创建非阻塞流  
     CUDA_CHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
   }
 #endif
@@ -94,6 +109,7 @@ void BasePrefetchingDataLayer<Dtype>::InternalThreadEntry() {
         if (this->output_labels_) {
           batch->label_.data().get()->async_gpu_push(stream);
         }
+        
         CUDA_CHECK(cudaStreamSynchronize(stream));
       }
 #endif
