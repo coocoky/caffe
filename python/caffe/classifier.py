@@ -30,6 +30,7 @@ class Classifier(caffe.Net):
         self.transformer = caffe.io.Transformer(
             {in_: self.blobs[in_].data.shape})
         self.transformer.set_transpose(in_, (2, 0, 1))
+        # 有mean文件设置
         if mean is not None:
             self.transformer.set_mean(in_, mean)
         if input_scale is not None:
