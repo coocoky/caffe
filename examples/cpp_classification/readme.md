@@ -54,6 +54,23 @@ image (`examples/images/cat.jpg`) using this command:
   data/ilsvrc12/synset_words.txt \
   examples/images/cat.jpg
 ```
+
+用均值文件
+```
+./build/examples/cpp_classification/classification_use_mean_value.bin \
+  models/bvlc_reference_caffenet/deploy.prototxt \
+  models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel \
+  114,171,113 \
+  data/ilsvrc12/synset_words.txt \
+  examples/images/cat.jpg
+
+```
+用批量文本均值文件测试
+
+```
+
+```
+
 The output should look like this:
 ```
 ---------- Prediction for examples/images/cat.jpg ----------
