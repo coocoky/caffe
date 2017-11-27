@@ -29,7 +29,7 @@ void im2col_cpu(const Dtype* data_im, const int channels,
   const int channel_size = height * width;
   for (int channel = channels; channel--; data_im += channel_size) {
     for (int kernel_row = 0; kernel_row < kernel_h; kernel_row++) {
-      for (int kernel_col = 0; kernel_col < kernel_w; kernel_col++) {
+      for (int kernel_col = 0; kernel_col < kernel_w; kernel_col++) { //一共有 kernel_row * kernel_col 列
         int input_row = -pad_h + kernel_row * dilation_h;
         for (int output_rows = output_h; output_rows; output_rows--) {
           if (!is_a_ge_zero_and_a_lt_b(input_row, height)) {
