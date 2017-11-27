@@ -46,6 +46,7 @@ required in order to map a prediction to the name of the class:
 ```
 Using the files that were downloaded, we can classify the provided cat
 image (`examples/images/cat.jpg`) using this command:
+用均值文件
 ```
 ./build/examples/cpp_classification/classification.bin \
   models/bvlc_reference_caffenet/deploy.prototxt \
@@ -55,7 +56,7 @@ image (`examples/images/cat.jpg`) using this command:
   examples/images/cat.jpg
 ```
 
-用均值文件
+用均值值
 ```
 ./build/examples/cpp_classification/classification_use_mean_value.bin \
   models/bvlc_reference_caffenet/deploy.prototxt \
@@ -68,6 +69,13 @@ image (`examples/images/cat.jpg`) using this command:
 用批量文本均值文件测试
 
 ```
+./build/examples/cpp_classification/classification_use_mean_value_filedir.bin \
+  --model_file=models/bvlc_reference_caffenet/deploy.prototxt \
+  -- models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel \
+  --mean_value=114,171,113 \
+  data/ilsvrc12/synset_words.txt \
+  examples/images/cat.jpg
+
 
 ```
 

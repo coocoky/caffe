@@ -152,8 +152,7 @@ void Classifier::SetMean(const string& mean_file) {
 void Classifier::SetMean_use_mean_value(const string& mean_value) {
 
   if (!mean_value.empty()) {
-    CHECK(mean_file.empty()) <<
-      "Cannot specify mean_file and mean_value at the same time";
+    
     stringstream ss(mean_value);
     vector<float> values;
     string item;

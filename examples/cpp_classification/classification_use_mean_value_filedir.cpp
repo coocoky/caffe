@@ -15,6 +15,22 @@
 using namespace caffe;  // NOLINT(build/namespaces)
 using std::string;
 
+
+// 公用的参数
+DEFINE_string(model_file, "deploy.prototxt",
+"The mean file used to subtract from the input image.");
+DEFINE_string(mean_value, "104,117,123",
+"If specified, can be one value or can be same as image channels"
+" - would subtract from the corresponding channel). Separated by ','."
+"Either mean_file or mean_value should be provided, not both.");
+DEFINE_string(trained_file, "train/model/iter_iter_500000.caffemodel",
+"The file type in the list_file. Currently support image and video.");
+DEFINE_string(label_file, "data/label.txt",
+"If provided, store the detection results in the out_file.");
+DEFINE_string(filedir, "data/label.txt",
+"If provided, store the detection results in the out_file.");
+
+
 /* Pair (label, confidence) representing a prediction. */
 typedef std::pair<string, float> Prediction;
 
@@ -152,8 +168,7 @@ void Classifier::SetMean(const string& mean_file) {
 void Classifier::SetMean_use_mean_value(const string& mean_value) {
 
   if (!mean_value.empty()) {
-    CHECK(mean_file.empty()) <<
-      "Cannot specify mean_file and mean_value at the same time";
+   
     stringstream ss(mean_value);
     vector<float> values;
     string item;
@@ -268,14 +283,14 @@ int main(int argc, char** argv) {
   
     ::google::InitGoogleLogging(argv[0]);
   
-    string model_file = argv[1];
+    string model_file = argv[1]; // Flage_model_file
     string trained_file = argv[2];
     string mean_file_value = argv[3];
     string label_file = argv[4];
     // Classifier classifier(model_file, trained_file, mean_file, label_file);
     // Classifier classifier(model_file, trained_file, mean_file, label_file);
     Classifier* classifier = new Classifier(model_file, trained_file, mean_file_value, label_file);
-    string file = argv[5]; //传入的字符串是保存所有图片路径的文件
+    string file = argv[5]; //传入的字符串是保存所有图片路径的文件 // Flage_
     std::cout << file << std::endl;
     std::ifstream fin(file.c_str());
     
